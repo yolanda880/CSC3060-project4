@@ -121,9 +121,12 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
             //    - clear is_prefetched if a prefetched line is consumed
             hits++;
             policy->onHit(lines, way, cycle);
+
+
             if(is_write) {
                 line.dirty = true;
             }
+
             if(line.is_prefetched) {
                 line.is_prefetched = false;
             }
@@ -145,6 +148,9 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
             break;
         }
     }
+    if (victim_way == -1){
+        victim_way = policy->getVictim(lines);
+    }
     CacheLine& victim_line = lines[victim_way];
 
     if (victim_line.valid && victim_line.dirty) {
@@ -160,14 +166,15 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
     victim_line.tag = tag;
     victim_line.dirty = is_write;
     victim_line.is_prefetched = false;
+
     policy->onMiss(lines, victim_way, cycle);
     // 6. Your code should work correctly even if cache size, associativity,
     //    number of sets, or cache line size changes.
-
+    return lat;
     // 7. Task 3: after demand access logic works, call the prefetcher here and
     //    install returned blocks through install_prefetch(...).
 
-    return lat;
+    
 }
 
 void CacheLevel::install_prefetch(uint64_t addr, uint64_t cycle) {
