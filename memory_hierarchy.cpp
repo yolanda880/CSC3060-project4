@@ -68,6 +68,7 @@ uint64_t CacheLevel::reconstruct_addr(uint64_t tag, uint64_t index) {
     (void)tag;
     (void)index;
     return 0;
+    //test
 }
 
 void CacheLevel::write_back_victim(const CacheLine& line, uint64_t index, uint64_t cycle) {
