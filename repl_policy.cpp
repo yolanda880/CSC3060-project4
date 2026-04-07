@@ -6,30 +6,34 @@
 // =========================================================
 
 void LRUPolicy::onHit(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
-    (void)cycle;
-    // TODO: mark the hit line as most recently used.
+    // TODO: initialize a newly inserted line as MRU.
+    set[way].last_access = cycle;
 }
 
 void LRUPolicy::onMiss(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
-    (void)cycle;
     // TODO: initialize a newly inserted line as MRU.
+    set[way].last_access = cycle;
 }
 
 int LRUPolicy::getVictim(std::vector<CacheLine>& set) {
-    (void)set;
     // TODO: return the least recently used way.
-    return 0;
+    int victim = 0;
+    uint64_t oldest = set[0].last_access;
+    for(size_t way = 1; way < set.size(); way++) {
+        if(set[way].last_access < oldest) {
+            victim = way;
+            oldest = set[way].last_access;
+        }
+    }
+    return victim;
+
 }
 
+
+
 void SRRIPPolicy::onHit(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
-    (void)cycle;
     // TODO: typically promote the line to RRPV=0.
+    
 }
 
 void SRRIPPolicy::onMiss(std::vector<CacheLine>& set, int way, uint64_t cycle) {

@@ -49,26 +49,36 @@ uint64_t CacheLevel::get_index(uint64_t addr) {
     // TODO: Task 1
     // Compute the set index from the address.
     // Hint: remove block offset bits first, then keep only the index bits.
-    (void)addr;
-    return 0;
+    uint64_t cache_size = (uint64_t)config.size_kb * 1024;
+    uint64_t num_sets = cache_size / (config.block_size * config.associativity);
+    uint64_t offset_bits = log2(config.block_size);
+    uint64_t index_bits = log2(num_sets);
+    uint64_t index = (addr >> offset_bits) & ((1 << index_bits) - 1);
+    return index;
 }
 
 uint64_t CacheLevel::get_tag(uint64_t addr) {
     // TODO: Task 1
     // Compute the tag from the address.
     // Hint: shift away both block offset bits and set index bits.
-    (void)addr;
-    return 0;
+    uint64_t cache_size = (uint64_t)config.size_kb * 1024;
+    uint64_t num_sets = cache_size / (config.block_size * config.associativity);
+    uint64_t offset_bits = log2(config.block_size);
+    uint64_t index_bits = log2(num_sets);
+    uint64_t tag = addr >> (offset_bits + index_bits);
+    return tag;
 }
 
 uint64_t CacheLevel::reconstruct_addr(uint64_t tag, uint64_t index) {
     // TODO: Task 1 / Task 2
     // Rebuild a block-aligned address from a tag and set index.
     // This helper is useful when writing back an evicted dirty line.
-    (void)tag;
-    (void)index;
-    return 0;
-    //test
+    uint64_t cache_size = (uint64_t)config.size_kb * 1024;
+    uint64_t num_sets = cache_size / (config.block_size * config.associativity);
+    uint64_t offset_bits = log2(config.block_size);
+    uint64_t index_bits = log2(num_sets);
+    uint64_t addr = (tag << (index_bits + offset_bits)) | (index << offset_bits);
+    return addr;
 }
 
 void CacheLevel::write_back_victim(const CacheLine& line, uint64_t index, uint64_t cycle) {
@@ -80,40 +90,83 @@ void CacheLevel::write_back_victim(const CacheLine& line, uint64_t index, uint64
     // 3. Increment the write-back counter.
     // 4. Reconstruct the evicted block address from tag + index.
     // 5. Send a write access to the next level.
-    (void)line;
-    (void)index;
-    (void)cycle;
+    if (!line.dirty || next_level == nullptr) {
+            return;
+        }
+    write_backs++;
+    uint64_t evicted_addr = reconstruct_addr(line.tag, index);
+    next_level->access(evicted_addr, 'w', cycle);
 }
 
 int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
     int lat = config.latency;
-
+    bool is_write = (type == 'w');
     // TODO: Task 1
     // 1. Derive the address fields for the current cache geometry:
     //    - block offset bits
     //    - set index bits
     //    - tag bits
+    uint64_t index = get_index(addr);
+    uint64_t tag = get_tag(addr);
     // 2. Use the address to compute index/tag and select the set.
+    std::vector<CacheLine>& lines = sets[index];
     // 3. Search all ways for a valid tag match.
-    // 4. On hit:
-    //    - increment hits
-    //    - call policy->onHit(...)
-    //    - update dirty bit for writes
-    //    - clear is_prefetched if a prefetched line is consumed
+    for(size_t way = 0; way < config.associativity; way++) {
+        CacheLine& line = lines[way];
+        if(line.valid && line.tag == tag) {
+            // 4. On hit:
+            //    - increment hits
+            //    - call policy->onHit(...)
+            //    - update dirty bit for writes
+            //    - clear is_prefetched if a prefetched line is consumed
+            hits++;
+            policy->onHit(lines, way, cycle);
+            if(is_write) {
+                line.dirty = true;
+            }
+            if(line.is_prefetched) {
+                line.is_prefetched = false;
+            }
+            return lat;
+        }
+    }
     // 5. On miss:
     //    - increment misses
     //    - find an invalid line or select a victim with policy->getVictim(...)
     //    - call write_back_victim(...) if the chosen victim is dirty
     //    - fetch the requested block from next_level and add that latency to lat
     //    - install the new cache line and call policy->onMiss(...)
+    misses++;
+    
+    int victim_way = -1;
+    for(size_t way = 0; way < config.associativity; way++) {
+        if(!lines[way].valid) {
+            victim_way = way;
+            break;
+        }
+    }
+    CacheLine& victim_line = lines[victim_way];
+
+    if (victim_line.valid && victim_line.dirty) {
+        write_back_victim(victim_line, index, cycle + lat);
+    }
+
+    if (next_level != nullptr) {
+        uint64_t block_addr = reconstruct_addr(tag, index);
+        lat += next_level->access(block_addr, 'r', cycle + lat);
+    }
+
+    victim_line.valid = true;
+    victim_line.tag = tag;
+    victim_line.dirty = is_write;
+    victim_line.is_prefetched = false;
+    policy->onMiss(lines, victim_way, cycle);
     // 6. Your code should work correctly even if cache size, associativity,
     //    number of sets, or cache line size changes.
+
     // 7. Task 3: after demand access logic works, call the prefetcher here and
     //    install returned blocks through install_prefetch(...).
 
-    (void)addr;
-    (void)type;
-    (void)cycle;
     return lat;
 }
 
