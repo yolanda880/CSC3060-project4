@@ -8,7 +8,9 @@ std::vector<uint64_t> NextLinePrefetcher::calculatePrefetch(uint64_t current_add
     // TODO: Task 3
     // 1. Align current_addr down to the current cache block.
     // 2. Prefetch the next sequential block.
-
+    uint64_t block_addr = current_addr & ~(block_size - 1);
+    uint64_t next_block_addr = block_addr + block_size;
+    prefetches.push_back(next_block_addr);
     return prefetches;
 }
 

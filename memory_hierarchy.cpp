@@ -183,8 +183,7 @@ void CacheLevel::install_prefetch(uint64_t addr, uint64_t cycle) {
     // treat prefetched lines as clean and mark is_prefetched = true.
     // If you evict a dirty victim during prefetch installation, reuse
     // write_back_victim(...) instead of duplicating that logic.
-    (void)addr;
-    (void)cycle;
+    
 }
 
 void CacheLevel::printStats() {
