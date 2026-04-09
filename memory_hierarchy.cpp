@@ -170,6 +170,12 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
     policy->onMiss(lines, victim_way, cycle);
     // 6. Your code should work correctly even if cache size, associativity,
     //    number of sets, or cache line size changes.
+    if (prefetcher != nullptr) {
+        std::vector<uint64_t> pf_addrs = prefetcher->calculatePrefetch(addr, cycle);
+        for (uint64_t pf_addr : pf_addrs) {
+            install_prefetch(pf_addr, cycle);
+        }
+    }
     return lat;
     // 7. Task 3: after demand access logic works, call the prefetcher here and
     //    install returned blocks through install_prefetch(...).
@@ -178,12 +184,51 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
 }
 
 void CacheLevel::install_prefetch(uint64_t addr, uint64_t cycle) {
-    // TODO: Task 3
-    // Implement a prefetch fill path similar to the miss path in access(), but
-    // treat prefetched lines as clean and mark is_prefetched = true.
-    // If you evict a dirty victim during prefetch installation, reuse
-    // write_back_victim(...) instead of duplicating that logic.
+    uint64_t tag = get_tag(addr);
+    uint64_t index = get_index(addr);
     
+    if (index >= sets.size()) {
+        return;
+    }
+    
+    std::vector<CacheLine>& lines = sets[index];
+    
+    for (size_t way = 0; way < config.associativity; way++) {
+        if (lines[way].valid && lines[way].tag == tag) {
+            return;
+        }
+    }
+    
+    int victim_way = -1;
+    
+    for (size_t way = 0; way < config.associativity; way++) {
+        if (!lines[way].valid) {
+            victim_way = way;
+            break;
+        }
+    }
+    
+    if (victim_way == -1) {
+        victim_way = policy->getVictim(lines);
+        
+        if (lines[victim_way].valid && lines[victim_way].dirty) {
+            write_back_victim(lines[victim_way], index, cycle);
+        }
+    }
+    
+    uint64_t block_addr = reconstruct_addr(tag, index);
+    if (next_level != nullptr) {
+        next_level->access(block_addr, 'r', cycle);
+    }
+    
+    lines[victim_way].valid = true;
+    lines[victim_way].tag = tag;
+    lines[victim_way].dirty = false;     
+    lines[victim_way].is_prefetched = true; 
+    
+    policy->onMiss(lines, victim_way, cycle);
+    
+    prefetch_issued++;
 }
 
 void CacheLevel::printStats() {

@@ -1,4 +1,5 @@
 #include "repl_policy.h"
+#include <climits>
 
 // =========================================================
 // TODO: Task 1 / Task 3 replacement policies
@@ -32,42 +33,64 @@ int LRUPolicy::getVictim(std::vector<CacheLine>& set) {
 
 
 void SRRIPPolicy::onHit(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    // TODO: typically promote the line to RRPV=0.
-    
+    (void)cycle;
+    set[way].rrpv = 0;
 }
 
 void SRRIPPolicy::onMiss(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
     (void)cycle;
-    // TODO: insert with a long re-reference interval, e.g. RRPV=2.
+    set[way].rrpv = 2;
 }
 
 int SRRIPPolicy::getVictim(std::vector<CacheLine>& set) {
-    (void)set;
-    // TODO: search for RRPV==3, otherwise age all lines and retry.
-    return 0;
+    const int MAX_RRPV = 3;
+    int assoc = set.size();
+    
+    while (true) {
+        for (int i = 0; i < assoc; i++) {
+            if (set[i].rrpv == MAX_RRPV) {
+                return i;
+            }
+        }
+        for (int i = 0; i < assoc; i++) {
+            set[i].rrpv++;
+        }
+    }
 }
 
 void BIPPolicy::onHit(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
-    (void)cycle;
-    // TODO: hits still become MRU.
+    set[way].last_access = cycle;
 }
 
 void BIPPolicy::onMiss(std::vector<CacheLine>& set, int way, uint64_t cycle) {
-    (void)set;
-    (void)way;
-    (void)cycle;
-    // TODO: mostly insert at LRU position, but occasionally insert at MRU.
-    // Hint: use insertion_counter and throttle.
+    (void)throttle;
+    int assoc = set.size();
+    insertion_counter++;
+    if (insertion_counter % (2 * assoc) == 0) {
+        set[way].last_access = cycle;
+    } else {
+        uint64_t min_time = UINT64_MAX;
+        int lru_way = 0;
+        for (int i = 0; i < assoc; i++) {
+            if (set[i].last_access < min_time) {
+                min_time = set[i].last_access;
+                lru_way = i;
+            }
+        }
+        set[way].last_access = set[lru_way].last_access;
+    }
 }
 
 int BIPPolicy::getVictim(std::vector<CacheLine>& set) {
-    (void)set;
-    // TODO: BIP usually uses the same victim selection as LRU.
-    return 0;
+   int victim = 0;
+    uint64_t oldest = set[0].last_access;
+    for (size_t way = 1; way < set.size(); way++) {
+        if (set[way].last_access < oldest) {
+            victim = way;
+            oldest = set[way].last_access;
+        }
+    }
+    return victim;
 }
 
 ReplacementPolicy* createReplacementPolicy(std::string name) {
