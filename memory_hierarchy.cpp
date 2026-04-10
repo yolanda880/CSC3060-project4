@@ -101,44 +101,26 @@ void CacheLevel::write_back_victim(const CacheLine& line, uint64_t index, uint64
 int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
     int lat = config.latency;
     bool is_write = (type == 'w');
-    // TODO: Task 1
-    // 1. Derive the address fields for the current cache geometry:
-    //    - block offset bits
-    //    - set index bits
-    //    - tag bits
+    
     uint64_t index = get_index(addr);
     uint64_t tag = get_tag(addr);
-    // 2. Use the address to compute index/tag and select the set.
+
     std::vector<CacheLine>& lines = sets[index];
-    // 3. Search all ways for a valid tag match.
+
     for(size_t way = 0; way < config.associativity; way++) {
         CacheLine& line = lines[way];
         if(line.valid && line.tag == tag) {
-            // 4. On hit:
-            //    - increment hits
-            //    - call policy->onHit(...)
-            //    - update dirty bit for writes
-            //    - clear is_prefetched if a prefetched line is consumed
             hits++;
             policy->onHit(lines, way, cycle);
-
-
             if(is_write) {
                 line.dirty = true;
             }
-
             if(line.is_prefetched) {
                 line.is_prefetched = false;
             }
             return lat;
         }
     }
-    // 5. On miss:
-    //    - increment misses
-    //    - find an invalid line or select a victim with policy->getVictim(...)
-    //    - call write_back_victim(...) if the chosen victim is dirty
-    //    - fetch the requested block from next_level and add that latency to lat
-    //    - install the new cache line and call policy->onMiss(...)
     misses++;
     
     int victim_way = -1;
@@ -148,9 +130,11 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
             break;
         }
     }
+
     if (victim_way == -1){
         victim_way = policy->getVictim(lines);
     }
+
     CacheLine& victim_line = lines[victim_way];
 
     if (victim_line.valid && victim_line.dirty) {
@@ -168,18 +152,15 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
     victim_line.is_prefetched = false;
 
     policy->onMiss(lines, victim_way, cycle);
-    // 6. Your code should work correctly even if cache size, associativity,
-    //    number of sets, or cache line size changes.
+    
     if (prefetcher != nullptr) {
-        std::vector<uint64_t> pf_addrs = prefetcher->calculatePrefetch(addr, cycle);
+        std::vector<uint64_t> pf_addrs = prefetcher->calculatePrefetch(addr, true);
         for (uint64_t pf_addr : pf_addrs) {
-            install_prefetch(pf_addr, cycle);
+            install_prefetch(pf_addr, cycle + lat);
         }
     }
     return lat;
-    // 7. Task 3: after demand access logic works, call the prefetcher here and
-    //    install returned blocks through install_prefetch(...).
-
+    
     
 }
 
