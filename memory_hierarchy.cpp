@@ -118,6 +118,12 @@ int CacheLevel::access(uint64_t addr, char type, uint64_t cycle) {
             if(line.is_prefetched) {
                 line.is_prefetched = false;
             }
+            if (prefetcher != nullptr) {
+                std::vector<uint64_t> pf_addrs = prefetcher->calculatePrefetch(addr, true); 
+                for (uint64_t pf_addr : pf_addrs) {
+                    install_prefetch(pf_addr, cycle + lat);
+                }
+            }
             return lat;
         }
     }
